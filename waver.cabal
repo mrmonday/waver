@@ -27,6 +27,7 @@ executable waver-exe
                      , helm
                      , random
                      , linear
+                     , containers
   default-language:    Haskell2010
 
 --test-suite waver-test
