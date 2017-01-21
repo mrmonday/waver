@@ -16,6 +16,7 @@ import qualified Helm.Cmd as Cmd
 import           Helm.Color
 import           Helm.Engine.SDL (SDLEngine)
 import qualified Helm.Engine.SDL as SDL
+import           Helm.Engine.SDL.Asset (withImage)
 import           Helm.Graphics2D
 import qualified Helm.Graphics2D.Text as Text
 import qualified Helm.Keyboard as Keyboard
@@ -23,6 +24,7 @@ import qualified Helm.Mouse as Mouse
 import qualified Helm.Sub as Sub
 import qualified Helm.Time as Time
 import           Helm.Time (Time)
+
 
 data Action
   = DoNothing
@@ -38,6 +40,8 @@ data Action
 
 data Component = PosX | PosY | Width | Height deriving (Show)
 data Dir = Up | Down deriving (Show)
+data SwirlDir = Cw | Ccw deriving (Show)
+data Swirl = Swirl SwirlDir (V2 Double) deriving (Show)
 
 eastMrBox :: MrBox
 eastMrBox = MrBox
@@ -71,8 +75,8 @@ southMrBox = MrBox
   , boxDirection = South
   }
 
-nextMrBox :: MrBox -> MrBox
-nextMrBox MrBox { .. } =
+nextMrBox :: SwirlDir -> MrBox -> MrBox
+nextMrBox Ccw MrBox { .. } =
   newMrBox { boxVel = V2 0 0
            , boxPos = boxPos
            }
@@ -82,6 +86,18 @@ nextMrBox MrBox { .. } =
                   East -> southMrBox
                   South -> westMrBox
                   West -> northMrBox
+
+nextMrBox Cw MrBox { .. } =
+  newMrBox { boxVel = V2 0 0
+           , boxPos = boxPos
+           }
+  where
+    newMrBox = case boxDirection of
+                  North -> westMrBox
+                  East -> northMrBox
+                  South -> eastMrBox
+                  West -> southMrBox
+
 
 data Direction = North | East | South | West
                  deriving(Show)
@@ -103,14 +119,21 @@ data Barrier = Barrier
 data Level = Level
   { barriers :: S.Seq Barrier
   , mrBox :: MrBox
+  , swirls :: [Swirl]
+  , curSwirlDir :: SwirlDir
+  , swirlAngle :: Double
   }
   deriving(Show)
 
 data Model = Model
   { level :: Level
   , editBarrier :: Int
+  , swirlCw :: Image SDLEngine
+  , swirlCcw :: Image SDLEngine
   }
-  deriving(Show)
+  --deriving(Show)
+instance Show Model where
+  show model = show (level model) ++ show (editBarrier model)
 
 --level1 :: Level
 --level1 = Level
@@ -143,6 +166,9 @@ level1 = Level
   , Barrier { barrierPos = V2 800 750, barrierShape = V2 800 50 }
   ])
   initialMrBox
+  []
+  Ccw
+  0.0
   where
     initialMrBox =
       northMrBox { boxPos   = V2 500 450
@@ -162,16 +188,21 @@ level2 = Level
   , Barrier { barrierPos = V2 412.0 384.0, barrierShape = V2 130.0 70.0 }
   ])
   initialMrBox
+  [Swirl Cw (V2 500 150)]
+  Ccw
+  0.0
   where
     initialMrBox =
       northMrBox { boxPos = V2 80.0 120.0
                  , boxVel = V2 0.0 0.0
                  }
-initial :: (Model, Cmd SDLEngine Action)
-initial =
+initial :: Image SDLEngine -> Image SDLEngine -> (Model, Cmd SDLEngine Action)
+initial swirlCw swirlCcw =
   ( Model
       { level = level2
       , editBarrier = 0
+      , swirlCw = swirlCw
+      , swirlCcw = swirlCcw
       }
   , Cmd.execute Rand.newStdGen SetupGame
   )
@@ -197,6 +228,15 @@ intersects
 intersectsAny :: S.Seq Barrier -> V2 Double -> V2 Double -> Bool
 intersectsAny bs v1 v2 = any (\b -> intersects b v1 v2) bs
 
+intersectsSwirl :: Swirl -> V2 Double -> V2 Double -> Bool
+intersectsSwirl (Swirl _ pos) = intersects barrier
+  where barrier = Barrier { barrierPos = pos, barrierShape = V2 128 128 }
+
+getSwirlDir :: SwirlDir -> [Swirl] -> V2 Double -> V2 Double -> SwirlDir
+getSwirlDir curDir ss v1 v2 = foldl sd curDir ss
+  where
+    sd a s@(Swirl swd _) = if intersectsSwirl s v1 v2 then swd else a
+
 update :: Model -> Action -> (Model, Cmd SDLEngine Action)
 update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StartSpacing =
     (model { level = level { mrBox = mrBox { boxVel = newVel boxDirection } } }, Cmd.none)
@@ -207,12 +247,13 @@ update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StartS
       newVel West = V2 (-10) 0
 
 update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StopSpacing =
-    (model { level = level { mrBox = nextMrBox mrBox } }, Cmd.none)
+    (model { level = level { mrBox = nextMrBox (curSwirlDir level) mrBox } }, Cmd.none)
 
 update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } (Animate dt) =
-    (model { level = level { mrBox = mrBox { boxPos = newBoxPos, boxVel = newBoxVel} } }, Cmd.none)
+    (model { level = level { mrBox = mrBox { boxPos = newBoxPos, boxVel = newBoxVel}, swirlAngle = swirlAngle level + 1.0, curSwirlDir = swirlDir } }, Cmd.none)
     where
       intersected = intersectsAny (barriers level) (boxPos + boxVel) mrBoxSize
+      swirlDir = getSwirlDir (curSwirlDir level) (swirls level) (boxPos + boxVel) (V2 128 128)
       newBoxPos = if intersected then boxPos else boxPos + boxVel
       newBoxVel = if intersected then V2 0 0 else boxVel
 
@@ -305,7 +346,9 @@ view model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } = Graphi
   collage
     [ backdrop
     , toForm $ collage $ toList barrierShapes
+    , toForm $ collage swirlImages
     , mrBox
+    --, image (V2 128 128) (swirlCw model)
     --, mrBoxOutline
     --, toForm $ collage [
     --        move boxPos mrBox
@@ -318,6 +361,10 @@ view model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } = Graphi
 
     barrierShapes = fmap barrier (barriers level)
     barrier b = move (barrierPos b) $ filled (rgb 0.65 0.25 0.11) $ rect (barrierShape b)
+
+    swirlImages = map mkSwirl (swirls level)
+    mkSwirl (Swirl Cw pos) = move pos $ image (V2 128 128) (swirlCw model)
+    mkSwirl (Swirl Ccw pos) = move pos $ image (V2 128 128) (swirlCcw model)
 
     mrBox = move boxPos $ filled boxColor $ mrBoxShape boxDirection
     mrBoxShape South = polygon $ path southCoords
@@ -350,8 +397,10 @@ main = do
     , SDL.windowIsFullscreen = False
     }
 
-  run engine GameConfig
-    { initialFn       = initial
+  withImage engine "assets/swirl-cw.png" $ \swirlCw ->
+    withImage engine "assets/swirl-ccw.png" $ \swirlCcw ->
+    run engine GameConfig
+    { initialFn       = initial swirlCw swirlCcw
     , updateFn        = update
     , subscriptionsFn = subscriptions
     , viewFn          = view
