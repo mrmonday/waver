@@ -3,7 +3,7 @@
 module Main where
 import           Data.List (find)
 import           Data.Maybe (isJust)
-import           Debug.Trace (traceShow)
+import           Debug.Trace (traceShowId)
 import           Text.Printf (printf)
 
 import           Linear.V2 (V2(V2))
@@ -27,6 +27,7 @@ data Action
   | Animate Double
   | StartSpacing
   | StopSpacing
+  | PrintState
   | SetupGame Rand.StdGen
 
 
@@ -75,6 +76,7 @@ nextMrBox MrBox { .. } =
                   West -> northMrBox
 
 data Direction = North | East | South | West
+                 deriving(Show)
 
 data MrBox = MrBox
   { boxPos   :: V2 Double
@@ -82,20 +84,24 @@ data MrBox = MrBox
   , boxColor :: Color
   , boxDirection :: Direction
   }
+  deriving(Show)
 
 data Barrier = Barrier
   { barrierPos :: V2 Double
   , barrierShape :: V2 Double
   }
+  deriving(Show)
 
 data Level = Level
   { barriers :: [Barrier]
   , mrBox :: MrBox
   }
+  deriving(Show)
 
 data Model = Model
   { level :: Level
   }
+  deriving(Show)
 
 level1 :: Level
 level1 = Level
@@ -141,6 +147,8 @@ update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StopSp
 update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } (Animate dt) =
     (model { level = level { mrBox = mrBox { boxPos = boxPos + boxVel } } }, Cmd.none)
 
+update model PrintState = (traceShowId model, Cmd.none)
+
 update model@Model { .. } _ = (model, Cmd.none)
 
 
@@ -148,6 +156,7 @@ subscriptions :: Sub SDLEngine Action
 subscriptions = Sub.batch
   [ Keyboard.downs keyDown
   , Keyboard.ups keyUp
+  , Keyboard.presses keyPress
   , Time.fps 60 Animate
   ]
 
@@ -158,6 +167,10 @@ keyDown _ = DoNothing
 keyUp :: Keyboard.Key -> Action
 keyUp Keyboard.SpaceKey = StopSpacing
 keyUp _ = DoNothing
+
+keyPress :: Keyboard.Key -> Action
+keyPress Keyboard.PKey = PrintState
+keyPress _ = DoNothing
 
 view :: Model -> Graphics SDLEngine
 view model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } = Graphics2D $
