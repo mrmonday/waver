@@ -147,6 +147,7 @@ data Model = Model
   , editBarrier :: Int
   , swirlCw :: Image SDLEngine
   , swirlCcw :: Image SDLEngine
+  , splashGgj :: Image SDLEngine
   , stage :: GameStage
   }
   --deriving(Show)
@@ -219,13 +220,14 @@ level2 = Level
                  , boxVel = V2 0.0 0.0
                  }
 
-initial :: Image SDLEngine -> Image SDLEngine -> (Model, Cmd SDLEngine Action)
-initial swirlCw swirlCcw =
+initial :: Image SDLEngine -> Image SDLEngine -> Image SDLEngine -> (Model, Cmd SDLEngine Action)
+initial swirlCw swirlCcw splashGgj =
   ( Model
       { level = level2
       , editBarrier = 0
       , swirlCw = swirlCw
       , swirlCcw = swirlCcw
+      , splashGgj = splashGgj
       , stage = Prelude
       }
   , Cmd.execute Rand.newStdGen SetupGame
@@ -379,7 +381,14 @@ view :: Model -> Graphics SDLEngine
 view model@Model { stage = Prelude, .. } = Graphics2D $
   collage
     [
+      image (fromIntegral <$> windowDims) splashGgj
+    , text $ Text.height 24
+           $ Text.color white
+           $ Text.toText "\n                                          Press space to start"
     ]
+  where
+    dims@(V2 w h) = fromIntegral <$> windowDims
+    white = rgb 1.0 1.0 1.0
 
 view model@Model { stage = Credits, .. } = Graphics2D $
   collage
@@ -444,9 +453,10 @@ main = do
 
   withImage engine "assets/swirl-cw.png" $ \swirlCw ->
     withImage engine "assets/swirl-ccw.png" $ \swirlCcw ->
-    run engine GameConfig
-    { initialFn       = initial swirlCw swirlCcw
-    , updateFn        = update
-    , subscriptionsFn = subscriptions
-    , viewFn          = view
+      withImage engine "assets/splash-ggj2017.png" $ \splashGgj ->
+        run engine GameConfig
+        { initialFn       = initial swirlCw swirlCcw splashGgj
+        , updateFn        = update
+        , subscriptionsFn = subscriptions
+        , viewFn          = view
 }
