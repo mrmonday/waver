@@ -42,6 +42,21 @@ data Component = PosX | PosY | Width | Height deriving (Show)
 data Dir = Up | Down deriving (Show)
 data SwirlDir = Cw | Ccw deriving (Show)
 data Swirl = Swirl SwirlDir (V2 Double) deriving (Show)
+data WinBox = WinBox (V2 Double) (V2 Double) deriving (Show)
+data GameStage = Prelude | GLevel Int | Credits
+
+maxLevel :: Int
+maxLevel = 1
+
+nextGameStage :: GameStage -> GameStage
+nextGameStage Prelude = GLevel 1
+nextGameStage (GLevel n)
+  | n == maxLevel = Credits
+  | otherwise = GLevel (n + 1)
+nextGameStage Credits = Credits
+
+nextLevel :: Int -> Level
+nextLevel n = level2
 
 eastMrBox :: MrBox
 eastMrBox = MrBox
@@ -122,6 +137,8 @@ data Level = Level
   , swirls :: [Swirl]
   , curSwirlDir :: SwirlDir
   , swirlAngle :: Double
+  , winBox :: WinBox
+  , won :: Bool
   }
   deriving(Show)
 
@@ -130,6 +147,7 @@ data Model = Model
   , editBarrier :: Int
   , swirlCw :: Image SDLEngine
   , swirlCcw :: Image SDLEngine
+  , stage :: GameStage
   }
   --deriving(Show)
 instance Show Model where
@@ -169,6 +187,8 @@ level1 = Level
   []
   Ccw
   0.0
+  (WinBox (V2 1062.0 254.0) (V2 50.0 200.0))
+  False
   where
     initialMrBox =
       northMrBox { boxPos   = V2 500 450
@@ -191,11 +211,14 @@ level2 = Level
   [Swirl Cw (V2 500 150)]
   Ccw
   0.0
+  (WinBox (V2 1062.0 254.0) (V2 50.0 200.0))
+  False
   where
     initialMrBox =
       northMrBox { boxPos = V2 80.0 120.0
                  , boxVel = V2 0.0 0.0
                  }
+
 initial :: Image SDLEngine -> Image SDLEngine -> (Model, Cmd SDLEngine Action)
 initial swirlCw swirlCcw =
   ( Model
@@ -203,6 +226,7 @@ initial swirlCw swirlCcw =
       , editBarrier = 0
       , swirlCw = swirlCw
       , swirlCcw = swirlCcw
+      , stage = Prelude
       }
   , Cmd.execute Rand.newStdGen SetupGame
   )
@@ -228,6 +252,11 @@ intersects
 intersectsAny :: S.Seq Barrier -> V2 Double -> V2 Double -> Bool
 intersectsAny bs v1 v2 = any (\b -> intersects b v1 v2) bs
 
+intersectsWinBox :: WinBox -> V2 Double -> V2 Double -> Bool
+intersectsWinBox (WinBox pos shape) = intersects barrier
+  where
+    barrier = Barrier { barrierPos = pos, barrierShape = shape }
+
 intersectsSwirl :: Swirl -> V2 Double -> V2 Double -> Bool
 intersectsSwirl (Swirl _ pos) = intersects barrier
   where barrier = Barrier { barrierPos = pos, barrierShape = V2 128 128 }
@@ -238,7 +267,7 @@ getSwirlDir curDir ss v1 v2 = foldl sd curDir ss
     sd a s@(Swirl swd _) = if intersectsSwirl s v1 v2 then swd else a
 
 update :: Model -> Action -> (Model, Cmd SDLEngine Action)
-update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StartSpacing =
+update model@Model { stage = GLevel _, level = level@Level { mrBox = mrBox@MrBox { .. } } } StartSpacing =
     (model { level = level { mrBox = mrBox { boxVel = newVel boxDirection } } }, Cmd.none)
     where
       newVel North = V2 0 10
@@ -246,28 +275,29 @@ update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StartS
       newVel South = V2 0 (-10)
       newVel West = V2 (-10) 0
 
-update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StopSpacing =
+update model@Model { stage = GLevel _, level = level@Level { mrBox = mrBox@MrBox { .. } } } StopSpacing =
     (model { level = level { mrBox = nextMrBox (curSwirlDir level) mrBox } }, Cmd.none)
 
-update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } (Animate dt) =
-    (model { level = level { mrBox = mrBox { boxPos = newBoxPos, boxVel = newBoxVel}, swirlAngle = swirlAngle level + 1.0, curSwirlDir = swirlDir } }, Cmd.none)
+update model@Model { stage = GLevel _, level = level@Level { mrBox = mrBox@MrBox { .. } } } (Animate dt) =
+    (model { level = level { mrBox = mrBox { boxPos = newBoxPos, boxVel = newBoxVel}, swirlAngle = swirlAngle level + 1.0, curSwirlDir = swirlDir, won = wonLevel } }, Cmd.none)
     where
       intersected = intersectsAny (barriers level) (boxPos + boxVel) mrBoxSize
       swirlDir = getSwirlDir (curSwirlDir level) (swirls level) (boxPos + boxVel) (V2 128 128)
+      wonLevel = intersectsWinBox (winBox level) (boxPos + boxVel) mrBoxSize
       newBoxPos = if intersected then boxPos else boxPos + boxVel
       newBoxVel = if intersected then V2 0 0 else boxVel
 
 
 update model PrintState = (traceShowId model, Cmd.none)
 
-update model@Model { .. } (SetBarrier b) =
+update model@Model { stage = GLevel _, .. } (SetBarrier b) =
   (model { editBarrier = newBarrier }, Cmd.none)
   where
     newBarrier = case b of
                    Just x -> read $ show editBarrier ++ show x
                    Nothing -> 0
 
-update model@Model { level = level@Level { .. } } (MoveBarrier comp dir) =
+update model@Model { stage = GLevel _, level = level@Level { .. } } (MoveBarrier comp dir) =
   (model { level = level { barriers = newBarriers } }, Cmd.none)
   where
     newBarriers = S.update (editBarrier model) (updatedBarrier comp dir) barriers
@@ -281,7 +311,7 @@ update model@Model { level = level@Level { .. } } (MoveBarrier comp dir) =
     updatedBarrier Height Down = oldBarrier { barrierShape = V2 w (h - 10) }
     oldBarrier@Barrier { barrierPos = barrierPos@(V2 x y), barrierShape = barrierShape@(V2 w h) } = S.index barriers (editBarrier model)
 
-update model@Model { level = level@Level { .. } } NewBarrier =
+update model@Model { stage = GLevel _, level = level@Level { .. } } NewBarrier =
   (model { level = level { barriers = newBarriers }, editBarrier = S.length barriers }, Cmd.none)
   where
     newBarriers = barriers S.|> Barrier
@@ -289,12 +319,17 @@ update model@Model { level = level@Level { .. } } NewBarrier =
                               , barrierShape = V2 50 100
                               }
 
-update model@Model { level = level@Level { .. } } RemoveBarrier =
+update model@Model { stage = GLevel _, level = level@Level { .. } } RemoveBarrier =
   (model { level = level { barriers = newBarriers } }, Cmd.none)
   where
     newBarriers = S.take (idx - 1) barriers S.>< S.drop idx barriers
     idx = editBarrier model
 
+update model@Model { stage = GLevel n, level = level@Level { won = True } } _ =
+  (model { level = nextLevel n, stage = nextGameStage (GLevel n) }, Cmd.none)
+
+update model@Model { stage = Prelude, .. } StopSpacing =
+  (model { stage = nextGameStage Prelude }, Cmd.none)
 
 update model@Model { .. } _ = (model, Cmd.none)
 
@@ -341,7 +376,17 @@ keyPress Keyboard.ZKey = SetBarrier Nothing
 keyPress _ = DoNothing
 
 view :: Model -> Graphics SDLEngine
-view model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } = Graphics2D $
+view model@Model { stage = Prelude, .. } = Graphics2D $
+  collage
+    [
+    ]
+
+view model@Model { stage = Credits, .. } = Graphics2D $
+  collage
+    [
+    ]
+
+view model@Model { stage = (GLevel n), level = level@Level { mrBox = mrBox@MrBox { .. } } } = Graphics2D $
   --center (V2 (w / 2) (h / 2)) $ collage
   collage
     [ backdrop
