@@ -90,11 +90,11 @@ data Barrier = Barrier
 
 data Level = Level
   { barriers :: [Barrier]
+  , mrBox :: MrBox
   }
 
 data Model = Model
-  { mrBox :: MrBox
-  , level :: Level
+  { level :: Level
   }
 
 level1 :: Level
@@ -108,38 +108,38 @@ level1 = Level
   , Barrier { barrierPos = V2 800 700, barrierShape = V2 50 500 }
   , Barrier { barrierPos = V2 800 700, barrierShape = V2 500 50 }
   ]
-
-initial :: (Model, Cmd SDLEngine Action)
-initial =
-  ( Model
-      { mrBox = initialMrBox
-      , level = level1
-      }
-  , Cmd.execute Rand.newStdGen SetupGame
-  )
+  initialMrBox
   where
     initialMrBox =
       northMrBox { boxPos   = V2 200 200
                  , boxVel   = V2 0 0
                  }
 
+initial :: (Model, Cmd SDLEngine Action)
+initial =
+  ( Model
+      { level = level1
+      }
+  , Cmd.execute Rand.newStdGen SetupGame
+  )
+
 windowDims :: V2 Int
 windowDims = V2 1024 768
 
 update :: Model -> Action -> (Model, Cmd SDLEngine Action)
-update model@Model { mrBox = mrBox@MrBox { .. } } StartSpacing =
-    (model { mrBox = mrBox { boxVel = newVel boxDirection } }, Cmd.none)
+update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StartSpacing =
+    (model { level = level { mrBox = mrBox { boxVel = newVel boxDirection } } }, Cmd.none)
     where
       newVel North = V2 0 10
       newVel East = V2 10 0
       newVel South = V2 0 (-10)
       newVel West = V2 (-10) 0
 
-update model@Model { mrBox = mrBox@MrBox { .. } } StopSpacing =
-    (model { mrBox = nextMrBox mrBox }, Cmd.none)
+update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StopSpacing =
+    (model { level = level { mrBox = nextMrBox mrBox } }, Cmd.none)
 
-update model@Model { mrBox = mrBox@MrBox { .. } } (Animate dt) =
-    (model { mrBox = mrBox { boxPos = boxPos + boxVel } }, Cmd.none)
+update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } (Animate dt) =
+    (model { level = level { mrBox = mrBox { boxPos = boxPos + boxVel } } }, Cmd.none)
 
 update model@Model { .. } _ = (model, Cmd.none)
 
@@ -160,7 +160,7 @@ keyUp Keyboard.SpaceKey = StopSpacing
 keyUp _ = DoNothing
 
 view :: Model -> Graphics SDLEngine
-view model@Model { mrBox = mrBox@MrBox { .. }, level } = Graphics2D $
+view model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } = Graphics2D $
   --center (V2 (w / 2) (h / 2)) $ collage
   collage
     [ backdrop
