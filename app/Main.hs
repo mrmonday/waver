@@ -3,7 +3,7 @@
 module Main where
 import           Data.List (find)
 import           Data.Maybe (isJust)
-import           Debug.Trace (traceShowId)
+import           Debug.Trace (traceShow, traceShowId)
 import           Text.Printf (printf)
 
 import           Linear.V2 (V2(V2))
@@ -132,6 +132,24 @@ initial =
 windowDims :: V2 Int
 windowDims = V2 1024 768
 
+mrBoxSize :: V2 Double
+mrBoxSize = V2 128 128
+
+intersects :: Barrier -> V2 Double -> V2 Double -> Bool
+intersects
+  Barrier { barrierPos = V2 bx by, barrierShape = V2 bw bh }
+  (V2 mx my)
+  (V2 mw mh) = bx' < mx + mw &&
+               bx' + bw > mx &&
+               by' < my + mh &&
+               bh + by' > my
+              where
+                bx' = bx - (bw / 2)
+                by' = by - (bh / 2)
+
+intersectsAny :: [Barrier] -> V2 Double -> V2 Double -> Bool
+intersectsAny bs v1 v2 = any (\b -> intersects b v1 v2) bs
+
 update :: Model -> Action -> (Model, Cmd SDLEngine Action)
 update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StartSpacing =
     (model { level = level { mrBox = mrBox { boxVel = newVel boxDirection } } }, Cmd.none)
@@ -145,12 +163,16 @@ update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } StopSp
     (model { level = level { mrBox = nextMrBox mrBox } }, Cmd.none)
 
 update model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } (Animate dt) =
-    (model { level = level { mrBox = mrBox { boxPos = boxPos + boxVel } } }, Cmd.none)
+    (model { level = level { mrBox = mrBox { boxPos = newBoxPos, boxVel = newBoxVel} } }, Cmd.none)
+    where
+      intersected = intersectsAny (barriers level) (boxPos + boxVel) mrBoxSize
+      newBoxPos = if intersected then boxPos else boxPos + boxVel
+      newBoxVel = if intersected then V2 0 0 else boxVel
+
 
 update model PrintState = (traceShowId model, Cmd.none)
 
 update model@Model { .. } _ = (model, Cmd.none)
-
 
 subscriptions :: Sub SDLEngine Action
 subscriptions = Sub.batch
@@ -179,6 +201,7 @@ view model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } = Graphi
     [ backdrop
     , toForm $ collage barrierShapes
     , mrBox
+    , mrBoxOutline
     --, toForm $ collage [
     --        move boxPos mrBox
     --    ]
@@ -196,7 +219,15 @@ view model@Model { level = level@Level { mrBox = mrBox@MrBox { .. } } } = Graphi
     mrBoxShape North = polygon $ path northCoords
     mrBoxShape East = polygon $ path eastCoords
     mrBoxShape West = polygon $ path westCoords
-    squareCoords = dumbCircle [V2 0 0, V2 0 128, V2 128 128, V2 128 0]
+    mrBoxOutline = outlined defaultLine $ polygon $ path mrBoxCoords
+    V2 mx my = boxPos
+    V2 mw mh = mrBoxSize
+    mrBoxCoords = [ V2  mx        my
+                  , V2 (mx + mw)  my
+                  , V2 (mx + mw) (my + mh)
+                  , V2  mx       (my + mh)
+                  , V2  mx        my
+                  ]
     westCoords = [V2 128 128, V2 128 0, V2 (128 - 110.85125168440815) 64]
     eastCoords = [V2 0 0, V2 0 128, V2 110.85125168440815 64]
     southCoords = [V2 128 128, V2 0 128, V2 64 (128 - 110.85125168440815)]
