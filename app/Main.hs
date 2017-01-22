@@ -392,8 +392,22 @@ view model@Model { stage = Prelude, .. } = Graphics2D $
 
 view model@Model { stage = Credits, .. } = Graphics2D $
   collage
-    [
+    [ backdrop
+    , move (V2 (w/2) ((h - 100)/2))
+           $ text
+           $ Text.height 72
+           $ Text.color white
+           $ Text.toText "Waver"
+    , move (V2 (w/2) (h/2))
+           $ text
+           $ Text.height 48
+           $ Text.color white
+           $ Text.toText "\n\n\nThank you for playing!"
     ]
+  where
+    dims@(V2 w h) = fromIntegral <$> windowDims
+    white = rgb 1.0 1.0 1.0
+    backdrop = move (V2 (w/2) (h/2)) $ filled (rgb 0.243 0.176 0.396) $ rect dims
 
 view model@Model { stage = (GLevel n), level = level@Level { mrBox = mrBox@MrBox { .. } } } = Graphics2D $
   --center (V2 (w / 2) (h / 2)) $ collage
