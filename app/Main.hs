@@ -5,10 +5,12 @@ import           Data.Foldable (toList)
 import           Data.List (find)
 import qualified Data.Sequence as S
 import           Data.Maybe (isJust)
+
 import           Debug.Trace (traceShow, traceShowId)
-import           Text.Printf (printf)
 
 import           Linear.V2 (V2(V2))
+import           System.Process (createProcess, proc, terminateProcess)
+
 import qualified System.Random as Rand
 
 import           Helm
@@ -393,16 +395,33 @@ view model@Model { stage = Prelude, .. } = Graphics2D $
 view model@Model { stage = Credits, .. } = Graphics2D $
   collage
     [ backdrop
-    , move (V2 (w/2) ((h - 100)/2))
+    , move (V2 (w/2) ((h - 300)/2))
            $ text
            $ Text.height 72
            $ Text.color white
            $ Text.toText "Waver"
-    , move (V2 (w/2) (h/2))
+    , move (V2 (w/2) ((h - 120)/2))
+           $ text
+           $ Text.height 24
+           $ Text.italic
+           $ Text.color white
+           $ Text.toText "Waving goodbye to the theme..."
+    , move (V2 (w/2) ((h + 240)/2))
            $ text
            $ Text.height 48
            $ Text.color white
-           $ Text.toText "\n\n\nThank you for playing!"
+           $ Text.toText "Thank you for playing!"
+    , move (V2 (w - 200) (h - 20))
+           $ text
+           $ Text.height 12
+           $ Text.color white
+           $ Text.toText "Soundtrack: Roleplay - Ladybug Castle (CC-BY 3.0)"
+    , move (V2 120 (h - 20))
+           $ text
+           $ Text.height 12
+           $ Text.color white
+           $ Text.toText "Gameplay: Robert Clipsham"
+
     ]
   where
     dims@(V2 w h) = fromIntegral <$> windowDims
@@ -465,6 +484,8 @@ main = do
     , SDL.windowIsFullscreen = False
     }
 
+  (_, _, _, music) <- createProcess $ proc "cvlc" ["assets/rolemusic-ladybug-castle.mp3"]
+
   withImage engine "assets/swirl-cw.png" $ \swirlCw ->
     withImage engine "assets/swirl-ccw.png" $ \swirlCcw ->
       withImage engine "assets/splash-ggj2017.png" $ \splashGgj ->
@@ -473,4 +494,7 @@ main = do
         , updateFn        = update
         , subscriptionsFn = subscriptions
         , viewFn          = view
-}
+        }
+
+  terminateProcess music
+
