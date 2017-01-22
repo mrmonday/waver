@@ -45,6 +45,7 @@ data SwirlDir = Cw | Ccw deriving (Show)
 data Swirl = Swirl SwirlDir (V2 Double) deriving (Show)
 data WinBox = WinBox (V2 Double) (V2 Double) deriving (Show)
 data GameStage = Prelude | GLevel Int | Credits
+data NoTurn = NoTurn (V2 Double) (V2 Double) deriving (Show)
 
 maxLevel :: Int
 maxLevel = 2
@@ -141,6 +142,7 @@ data Level = Level
   , swirlAngle :: Double
   , winBox :: WinBox
   , won :: Bool
+  , noTurn :: Maybe NoTurn
   }
   deriving(Show)
 
@@ -192,6 +194,7 @@ level1 = Level
   0.0
   (WinBox (V2 1062.0 254.0) (V2 50.0 200.0))
   False
+  Nothing
   where
     initialMrBox =
       northMrBox { boxPos   = V2 500 450
@@ -216,6 +219,7 @@ level2 = Level
   0.0
   (WinBox (V2 1062.0 254.0) (V2 50.0 200.0))
   False
+  Nothing
   where
     initialMrBox =
       northMrBox { boxPos = V2 80.0 120.0
@@ -243,6 +247,7 @@ level3 = Level
   0.0
   (WinBox (V2 822.0 784.0) (V2 230.0 30.0))
   False
+  (Just $ NoTurn (V2 132 384) (V2 190 210))
   where
     initialMrBox =
       eastMrBox { boxPos = V2 30.0 320.0
@@ -288,6 +293,11 @@ intersectsWinBox (WinBox pos shape) = intersects barrier
   where
     barrier = Barrier { barrierPos = pos, barrierShape = shape }
 
+intersectsNoTurn :: NoTurn -> V2 Double -> V2 Double -> Bool
+intersectsNoTurn (NoTurn pos shape) = intersects barrier
+  where
+    barrier = Barrier { barrierPos = pos, barrierShape = shape }
+
 intersectsSwirl :: Swirl -> V2 Double -> V2 Double -> Bool
 intersectsSwirl (Swirl _ pos) = intersects barrier
   where barrier = Barrier { barrierPos = pos + 64, barrierShape = V2 128 128 }
@@ -307,7 +317,12 @@ update model@Model { stage = GLevel _, level = level@Level { mrBox = mrBox@MrBox
       newVel West = V2 (-10) 0
 
 update model@Model { stage = GLevel _, level = level@Level { mrBox = mrBox@MrBox { .. } } } StopSpacing =
-    (model { level = level { mrBox = nextMrBox (curSwirlDir level) mrBox } }, Cmd.none)
+    (model { level = level { mrBox = newMrBox, noTurn = Nothing } }, Cmd.none)
+  where
+    intersects Nothing = False
+    intersects (Just noTurn) = intersectsNoTurn noTurn boxPos mrBoxSize
+    newMrBox = if intersects (noTurn level) then mrBox { boxVel = V2 0 0 } else nextMrBox (curSwirlDir level) mrBox
+
 
 update model@Model { stage = GLevel _, level = level@Level { mrBox = mrBox@MrBox { .. } } } (Animate dt) =
     (model { level = level { mrBox = mrBox { boxPos = newBoxPos, boxVel = newBoxVel}, swirlAngle = swirlAngle level + 1.0, curSwirlDir = swirlDir, won = wonLevel } }, Cmd.none)
