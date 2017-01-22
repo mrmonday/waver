@@ -48,7 +48,7 @@ data GameStage = Prelude | GLevel Int | Credits
 data NoTurn = NoTurn (V2 Double) (V2 Double) deriving (Show)
 
 maxLevel :: Int
-maxLevel = 2
+maxLevel = 3
 
 nextGameStage :: GameStage -> GameStage
 nextGameStage Prelude = GLevel 1
@@ -59,6 +59,7 @@ nextGameStage Credits = Credits
 
 nextLevel :: Int -> Level
 nextLevel 1 = level3
+nextLevel 2 = level4
 nextLevel n = level2
 
 eastMrBox :: MrBox
@@ -253,6 +254,30 @@ level3 = Level
       eastMrBox { boxPos = V2 30.0 320.0
                 , boxVel = V2 0.0 0.0
                 }
+
+level4 :: Level
+level4 = Level
+  (S.fromList
+   [ Barrier {barrierPos = V2 662.0 754.0 , barrierShape = V2 720.0 40.0 }
+   , Barrier {barrierPos = V2 1002.0 394.0 , barrierShape = V2 50.0 790.0 }
+   , Barrier {barrierPos = V2 952.0 14.0 , barrierShape = V2 80.0 50.0 }
+   , Barrier {barrierPos = V2 342.0 14.0 , barrierShape = V2 690.0 50.0 }
+   , Barrier {barrierPos = V2 22.0 404.0 , barrierShape = V2 50.0 730.0 }
+   , Barrier {barrierPos = V2 52.0 754.0 , barrierShape = V2 60.0 40.0 }
+   , Barrier {barrierPos = V2 802.0 (-16.0), barrierShape = V2 230.0 30.0 }
+   ])
+  initialMrBox
+  []
+  Cw
+  0.0
+  (WinBox (V2 192 794) (V2 240 40))
+  False
+  (Just $ NoTurn (V2 802 64) (V2 230 130))
+  where
+    initialMrBox =
+      northMrBox { boxPos = V2 730 30
+                 , boxVel = V2 0 0
+                 }
 
 initial :: Image SDLEngine -> Image SDLEngine -> Image SDLEngine -> (Model, Cmd SDLEngine Action)
 initial swirlCw swirlCcw splashGgj =
