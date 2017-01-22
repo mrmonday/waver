@@ -267,13 +267,18 @@ level4 = Level
    , Barrier {barrierPos = V2 802.0 (-16.0), barrierShape = V2 230.0 30.0 }
    ])
   initialMrBox
-  []
+  [Swirl (swDir i j) (V2 (100 + (170 * fromInteger i)) (50 + (170 * fromInteger j))) | i <- [0..4], j <- [0..3]]
   Cw
   0.0
-  (WinBox (V2 192 794) (V2 240 40))
+  (WinBox (V2 392 824) (V2 740 100))
   False
   (Just $ NoTurn (V2 802 64) (V2 230 130))
   where
+    swDir i j = case (i `rem` 2, j `rem` 2) of
+                  (0, 0) -> Ccw
+                  (0, 1) -> Cw
+                  (1, 0) -> Cw
+                  (1, 1) -> Ccw
     initialMrBox =
       northMrBox { boxPos = V2 730 30
                  , boxVel = V2 0 0
