@@ -27,7 +27,6 @@ import qualified Helm.Sub as Sub
 import qualified Helm.Time as Time
 import           Helm.Time (Time)
 
-
 data Action
   = DoNothing
   | Animate Double
@@ -48,7 +47,7 @@ data WinBox = WinBox (V2 Double) (V2 Double) deriving (Show)
 data GameStage = Prelude | GLevel Int | Credits
 
 maxLevel :: Int
-maxLevel = 1
+maxLevel = 2
 
 nextGameStage :: GameStage -> GameStage
 nextGameStage Prelude = GLevel 1
@@ -58,6 +57,7 @@ nextGameStage (GLevel n)
 nextGameStage Credits = Credits
 
 nextLevel :: Int -> Level
+nextLevel 1 = level3
 nextLevel n = level2
 
 eastMrBox :: MrBox
@@ -222,6 +222,33 @@ level2 = Level
                  , boxVel = V2 0.0 0.0
                  }
 
+level3 :: Level
+level3 = Level
+  (S.fromList
+  [ Barrier { barrierPos = V2 362.0 754.0, barrierShape = V2 730.0 40.0 }
+  , Barrier { barrierPos = V2 982.0 754.0, barrierShape = V2 100.0 40.0 }
+  , Barrier { barrierPos = V2 1002.0 364.0, barrierShape = V2 50.0 740.0 }
+  , Barrier { barrierPos = V2 492.0 24.0, barrierShape = V2 990.0 50.0 }
+  , Barrier { barrierPos = V2 22.0 614.0, barrierShape = V2 50.0 250.0 }
+  , Barrier { barrierPos = V2 22.0 164.0, barrierShape = V2 50.0 240.0 }
+  , Barrier { barrierPos = V2 (-28.0) 384.0, barrierShape = V2 50.0 240.0 }
+  , Barrier { barrierPos = V2 672.0 384.0, barrierShape = V2 50.0 230.0 }
+  ])
+  initialMrBox
+  [ Swirl Ccw (V2 300 300)
+  , Swirl Cw  (V2 450 300)
+  , Swirl Cw  (V2 300 120)
+  ]
+  Cw
+  0.0
+  (WinBox (V2 822.0 784.0) (V2 230.0 30.0))
+  False
+  where
+    initialMrBox =
+      eastMrBox { boxPos = V2 30.0 320.0
+                , boxVel = V2 0.0 0.0
+                }
+
 initial :: Image SDLEngine -> Image SDLEngine -> Image SDLEngine -> (Model, Cmd SDLEngine Action)
 initial swirlCw swirlCcw splashGgj =
   ( Model
@@ -263,7 +290,7 @@ intersectsWinBox (WinBox pos shape) = intersects barrier
 
 intersectsSwirl :: Swirl -> V2 Double -> V2 Double -> Bool
 intersectsSwirl (Swirl _ pos) = intersects barrier
-  where barrier = Barrier { barrierPos = pos, barrierShape = V2 128 128 }
+  where barrier = Barrier { barrierPos = pos + 64, barrierShape = V2 128 128 }
 
 getSwirlDir :: SwirlDir -> [Swirl] -> V2 Double -> V2 Double -> SwirlDir
 getSwirlDir curDir ss v1 v2 = foldl sd curDir ss
